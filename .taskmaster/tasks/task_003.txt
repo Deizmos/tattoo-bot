@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Загрузка референсов: файлы/ссылки, хранение, безопасность
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Загрузка изображений и ссылок; интеграция S3/Uploadcare; ограничения и доступ; превью.
+# Details:
+
+
+# Test Strategy:
+

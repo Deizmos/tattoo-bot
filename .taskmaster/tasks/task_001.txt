@@ -1,0 +1,11 @@
+# Task ID: 1
+# Title: Собрать каркас репозитория: линтеры, форматтер, CI
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Инициализировать репо, добавить ESLint+Prettier, Husky, lint-staged, базовый CI (GitHub Actions).
+# Details:
+
+
+# Test Strategy:
+

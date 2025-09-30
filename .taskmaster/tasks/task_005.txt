@@ -1,0 +1,11 @@
+# Task ID: 5
+# Title: Галерея результатов и версияция правок
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Отображение 3–6 эскизов, лайк/дизлайк, создание новых версий по правкам (prompt), сохранение метаданных.
+# Details:
+
+
+# Test Strategy:
+

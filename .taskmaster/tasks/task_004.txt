@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Интеграция провайдера генерации изображений (MVP)
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Добавить абстракцию провайдера и подключить одного провайдера (например, Stable Diffusion API). Очередь задач и ретраи.
+# Details:
+
+
+# Test Strategy:
+

@@ -1,0 +1,88 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Собрать каркас репозитория: линтеры, форматтер, CI",
+        "description": "Инициализировать репо, добавить ESLint+Prettier, Husky, lint-staged, базовый CI (GitHub Actions).",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Бриф: форма, валидация, сохранение черновика",
+        "description": "Реализовать онбординг и форму брифа: поля стиль/локация/размер/бюджет; валидация; сохранение черновика сессии.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Загрузка референсов: файлы/ссылки, хранение, безопасность",
+        "description": "Загрузка изображений и ссылок; интеграция S3/Uploadcare; ограничения и доступ; превью.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Интеграция провайдера генерации изображений (MVP)",
+        "description": "Добавить абстракцию провайдера и подключить одного провайдера (например, Stable Diffusion API). Очередь задач и ретраи.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Галерея результатов и версияция правок",
+        "description": "Отображение 3–6 эскизов, лайк/дизлайк, создание новых версий по правкам (prompt), сохранение метаданных.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Заявка мастеру и чат",
+        "description": "Форма заявки, передача брифа мастеру, простой чат (websocket/polling), уведомления email/Telegram.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Админ‑панель (минимум): модерация и заявки",
+        "description": "Список генераций, жалобы/флаги, модерация контента, список заявок пользователей.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-09-30T16:52:53.028Z",
+      "description": "Default tasks context",
+      "updated": "2025-09-30T16:53:36.262Z"
+    }
+  }
+}

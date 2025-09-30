@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Админ‑панель (минимум): модерация и заявки
+# Status: pending
+# Dependencies: None
+# Priority: low
+# Description: Список генераций, жалобы/флаги, модерация контента, список заявок пользователей.
+# Details:
+
+
+# Test Strategy:
+
