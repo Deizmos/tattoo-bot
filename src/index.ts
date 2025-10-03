@@ -33,7 +33,7 @@ class TattooBot {
       token: process.env.BOT_TOKEN,
       ...(process.env.WEBHOOK_URL && { webhookUrl: process.env.WEBHOOK_URL }),
       ...(process.env.WEBHOOK_PORT && { webhookPort: parseInt(process.env.WEBHOOK_PORT) }),
-      databasePath: process.env.DATABASE_PATH || './database/bot.db',
+      databasePath: process.env.DATABASE_PATH || (process.env.NODE_ENV === 'production' ? '/tmp/tattoo-bot.db' : './database/bot.db'),
       logLevel: process.env.LOG_LEVEL || 'info',
       ...(process.env.WEBHOOK_SECRET && { webhookSecret: process.env.WEBHOOK_SECRET }),
       ...(process.env.MASTER_CHAT_ID && { masterChatId: process.env.MASTER_CHAT_ID })

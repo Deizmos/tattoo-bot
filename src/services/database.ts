@@ -6,8 +6,31 @@ export class DatabaseService {
   private db: sqlite3.Database;
 
   constructor(databasePath: string) {
-    this.db = new sqlite3.Database(databasePath);
+    // На Render используем временную директорию, если указанный путь недоступен
+    const actualPath = this.getDatabasePath(databasePath);
+    this.db = new sqlite3.Database(actualPath);
     this.initializeTables();
+  }
+
+  private getDatabasePath(originalPath: string): string {
+    // Проверяем, доступна ли указанная директория
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dir = path.dirname(originalPath);
+      
+      // Если директория не существует, создаем её
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      
+      return originalPath;
+    } catch (error) {
+      // Если не удается создать директорию, используем временную папку
+      const os = require('os');
+      const path = require('path');
+      return path.join(os.tmpdir(), 'tattoo-bot.db');
+    }
   }
 
   private initializeTables(): void {
