@@ -7,9 +7,7 @@ import { DatabaseService } from './services/database';
 import { createSessionMiddleware } from './middleware/session';
 import { startCommand } from './commands/start';
 import { helpCommand } from './commands/help';
-import { requestCommand, handleRequestCallback } from './commands/request';
-import { requestSimpleCommand, handleSimpleRequestText } from './commands/request-simple';
-import { requestGlobalCommand, handleGlobalRequestText, requestSessions } from './commands/request-global';
+import { requestCommand, handleRequestText, requestSessions } from './commands/request';
 import Logger from './utils/logger';
 import { BotConfig } from './types';
 
@@ -73,20 +71,20 @@ class TattooBot {
     // Команда /help
     this.bot.help(helpCommand);
 
-    // Команда /request (глобальная версия)
+    // Команда /request
     this.bot.command('request', (ctx) => {
       // Добавляем сервисы в контекст
       (ctx as any).database = this.database;
       (ctx as any).logger = this.logger;
-      return requestGlobalCommand(ctx as any);
+      return requestCommand(ctx as any);
     });
 
-    // Обработка callback'ов
-    this.bot.on('callback_query', async (ctx) => {
-      (ctx as any).database = this.database;
-      (ctx as any).logger = this.logger;
-      return handleRequestCallback(ctx as any);
-    });
+    // Обработка callback'ов (если понадобится в будущем)
+    // this.bot.on('callback_query', async (ctx) => {
+    //   (ctx as any).database = this.database;
+    //   (ctx as any).logger = this.logger;
+    //   return handleRequestCallback(ctx as any);
+    // });
 
     // Обработка текстовых сообщений
     this.bot.on(message('text'), async (ctx) => {
@@ -97,36 +95,21 @@ class TattooBot {
         const session = (ctx as any).session?.[sessionKey];
         
         if (session && session.step) {
-          console.log('Found active session, processing request step:', session.step);
           // Добавляем сервисы в контекст
           (ctx as any).database = this.database;
           (ctx as any).logger = this.logger;
           return requestCommand(ctx as any);
-        } else if (session && session.waitingForDescription) {
-          console.log('Found simple request session, processing description');
-          console.log('Session data:', session);
-          // Добавляем сервисы в контекст
-          (ctx as any).database = this.database;
-          (ctx as any).logger = this.logger;
-          return handleSimpleRequestText(ctx as any);
-        } else {
-          console.log('No active session found for user:', userId);
-          console.log('Available sessions:', Object.keys((ctx as any).session || {}));
         }
       }
 
-      // Проверяем глобальные сессии
+      // Проверяем сессии для команды /request
       if (userId) {
         const globalSession = requestSessions[userId];
         if (globalSession && globalSession.waitingForDescription) {
-          console.log('Found global request session, processing description');
-          console.log('Global session data:', globalSession);
           // Добавляем сервисы в контекст
           (ctx as any).database = this.database;
           (ctx as any).logger = this.logger;
-          return handleGlobalRequestText(ctx as any);
-        } else {
-          console.log('No global session found for user:', userId);
+          return handleRequestText(ctx as any);
         }
       }
 

@@ -8,6 +8,9 @@ interface RequestCommandContext extends Context {
   logger?: Logger;
 }
 
+// Глобальное хранилище сессий
+export const requestSessions: { [userId: number]: any } = {};
+
 export async function requestCommand(ctx: RequestCommandContext): Promise<void> {
   if (!ctx.from) {
     await ctx.reply('❌ Ошибка: не удалось определить пользователя');
@@ -17,17 +20,7 @@ export async function requestCommand(ctx: RequestCommandContext): Promise<void> 
   const userId = ctx.from.id;
   const userInfo = ctx.from;
 
-  // Проверяем, есть ли у пользователя активная сессия создания запроса
-  const sessionKey = `request_${userId}`;
-  const currentSession = (ctx as any).session?.[sessionKey];
-
-  if (currentSession && currentSession.step) {
-    // Продолжаем процесс создания запроса
-    await handleRequestStep(ctx, currentSession);
-    return;
-  }
-
-  // Начинаем новый процесс создания запроса
+  // Простое сообщение с инструкциями
   const welcomeMessage = `🎨 <b>Создание запроса на татуировку</b>
 
 Пожалуйста, опишите вашу идею татуировки. Включите следующую информацию:
@@ -43,94 +36,46 @@ export async function requestCommand(ctx: RequestCommandContext): Promise<void> 
 • Можете прикрепить фотографии-референсы
 • Указать особые пожелания
 
-Напишите ваш запрос одним сообщением, и я передам его мастеру!`;
+<b>Напишите ваш запрос одним сообщением, и я передам его мастеру!</b>
+
+<i>Пример: "Хочу татуировку дракона в стиле реализм на плече, размер средний, бюджет до 50000 рублей"</i>`;
 
   await ctx.reply(welcomeMessage, { parse_mode: 'HTML' });
 
-  // Инициализируем сессию
-  if (!(ctx as any).session) {
-    (ctx as any).session = {};
-  }
-  (ctx as any).session[sessionKey] = {
-    step: 'waiting_for_description',
-    data: {
-      userId,
-      userInfo: {
-        id: userInfo.id,
-        username: userInfo.username,
-        firstName: userInfo.first_name,
-        lastName: userInfo.last_name
-      }
-    }
+  // Сохраняем информацию в глобальное хранилище
+  requestSessions[userId] = {
+    waitingForDescription: true,
+    userInfo: {
+      id: userInfo.id,
+      username: userInfo.username,
+      firstName: userInfo.first_name,
+      lastName: userInfo.last_name
+    },
+    timestamp: Date.now()
   };
 
-  console.log('Session initialized:', (ctx as any).session[sessionKey]);
+  console.log('Request command initialized for user:', userId);
 }
 
-async function handleRequestStep(ctx: RequestCommandContext, session: any): Promise<void> {
-  const { step, data } = session;
+export async function handleRequestText(ctx: RequestCommandContext): Promise<void> {
+  if (!ctx.from || !('text' in ctx.message!)) {
+    return;
+  }
 
-  if (step === 'waiting_for_description') {
-    // Обрабатываем описание запроса
-    if (!('text' in ctx.message!)) {
-      await ctx.reply('❌ Пожалуйста, отправьте текстовое описание вашей татуировки');
-      return;
-    }
+  const userId = ctx.from.id;
+  const session = requestSessions[userId];
 
+  console.log('Checking request session for user:', userId);
+
+  // Проверяем, ждет ли бот описание запроса от этого пользователя
+  if (session && session.waitingForDescription) {
     const description = ctx.message.text;
     
-    // Сохраняем описание в сессию
-    data.description = description;
-    session.step = 'waiting_for_confirm';
-    (ctx as any).session[`request_${data.userId}`] = session;
-
-    // Показываем превью запроса
-    const previewMessage = `📋 <b>Превью вашего запроса:</b>
-
-👤 <b>Клиент:</b> ${data.userInfo.firstName} ${data.userInfo.lastName || ''} ${data.userInfo.username ? `(@${data.userInfo.username})` : ''}
-
-📝 <b>Описание:</b>
-${description}
-
-✅ <b>Подтвердить отправку запроса мастеру?</b>
-
-Используйте кнопки ниже для подтверждения или отмены.`;
-
-    await ctx.reply(previewMessage, { 
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Отправить запрос', callback_data: 'confirm_request' },
-            { text: '❌ Отменить', callback_data: 'cancel_request' }
-          ]
-        ]
-      }
-    });
-  }
-}
-
-export async function handleRequestCallback(ctx: RequestCommandContext): Promise<void> {
-  if (!('callback_query' in ctx.update) || !ctx.from || !ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
-    return;
-  }
-
-  const callbackData = ctx.callbackQuery.data;
-  const userId = ctx.from.id;
-  const sessionKey = `request_${userId}`;
-  const session = (ctx as any).session?.[sessionKey];
-
-  if (!session || !session.data) {
-    await ctx.answerCbQuery('❌ Сессия истекла. Начните заново с /request');
-    return;
-  }
-
-  if (callbackData === 'confirm_request') {
     try {
       // Сохраняем запрос в базу данных
       const requestData: Omit<TattooRequest, 'id' | 'createdAt' | 'updatedAt'> = {
-        userId: session.data.userId,
-        description: session.data.description,
+        userId: session.userInfo.id,
+        description: description,
         status: 'pending'
       };
 
@@ -138,37 +83,29 @@ export async function handleRequestCallback(ctx: RequestCommandContext): Promise
         const requestId = await ctx.database.saveTattooRequest(requestData);
         
         // Отправляем запрос мастеру
-        await sendRequestToMaster(ctx, session.data, requestId);
+        await sendRequestToMaster(ctx, session.userInfo, requestId, description);
         
         // Очищаем сессию
-        delete (ctx as any).session[sessionKey];
+        delete requestSessions[userId];
         
-        await ctx.answerCbQuery('✅ Запрос успешно отправлен мастеру!');
-        await ctx.editMessageText('✅ <b>Запрос отправлен!</b>\n\nВаш запрос был передан мастеру. Мы свяжемся с вами в ближайшее время для обсуждения деталей.\n\nСпасибо за обращение! 🎨', { 
+        await ctx.reply('✅ <b>Запрос отправлен!</b>\n\nВаш запрос был передан мастеру. Мы свяжемся с вами в ближайшее время для обсуждения деталей.\n\nСпасибо за обращение! 🎨', { 
           parse_mode: 'HTML' 
         });
+
+        console.log('Request #' + requestId + ' saved and sent to master');
       } else {
         throw new Error('Database service not available');
       }
     } catch (error) {
       console.error('Error saving request:', error);
-      await ctx.answerCbQuery('❌ Ошибка при сохранении запроса');
-      await ctx.editMessageText('❌ <b>Произошла ошибка</b>\n\nПопробуйте создать запрос заново с помощью команды /request', { 
+      await ctx.reply('❌ <b>Произошла ошибка</b>\n\nПопробуйте создать запрос заново с помощью команды /request', { 
         parse_mode: 'HTML' 
       });
     }
-  } else if (callbackData === 'cancel_request') {
-    // Очищаем сессию
-    delete (ctx as any).session[sessionKey];
-    
-    await ctx.answerCbQuery('❌ Запрос отменен');
-    await ctx.editMessageText('❌ <b>Запрос отменен</b>\n\nЕсли передумаете, используйте команду /request для создания нового запроса.', { 
-      parse_mode: 'HTML' 
-    });
   }
 }
 
-async function sendRequestToMaster(ctx: RequestCommandContext, requestData: any, requestId: number): Promise<void> {
+async function sendRequestToMaster(ctx: RequestCommandContext, userInfo: any, requestId: number, description: string): Promise<void> {
   // ID мастера - должен быть настроен в переменных окружения
   const masterChatId = process.env.MASTER_CHAT_ID;
   
@@ -180,17 +117,17 @@ async function sendRequestToMaster(ctx: RequestCommandContext, requestData: any,
   const masterMessage = `🎨 <b>Новый запрос на татуировку #${requestId}</b>
 
 👤 <b>Клиент:</b>
-• Имя: ${requestData.userInfo.firstName} ${requestData.userInfo.lastName || ''}
-• Username: ${requestData.userInfo.username ? `@${requestData.userInfo.username}` : 'не указан'}
-• ID: ${requestData.userId}
+• Имя: ${userInfo.firstName} ${userInfo.lastName || ''}
+• Username: ${userInfo.username ? `@${userInfo.username}` : 'не указан'}
+• ID: ${userInfo.id}
 
 📝 <b>Описание запроса:</b>
-${requestData.description}
+${description}
 
 📅 <b>Дата создания:</b> ${new Date().toLocaleString('ru-RU')}
 
 💬 <b>Для ответа клиенту используйте:</b>
-<code>Ответить пользователю ${requestData.userId}: ваш ответ</code>`;
+<code>Ответить пользователю ${userInfo.id}: ваш ответ</code>`;
 
   try {
     await ctx.telegram.sendMessage(masterChatId, masterMessage, { 
@@ -200,7 +137,7 @@ ${requestData.description}
           [
             { 
               text: '💬 Ответить клиенту', 
-              url: `https://t.me/${ctx.botInfo?.username}?start=reply_${requestData.userId}` 
+              url: `https://t.me/${ctx.botInfo?.username}?start=reply_${userInfo.id}` 
             }
           ]
         ]
@@ -210,7 +147,7 @@ ${requestData.description}
     if (ctx.logger) {
       ctx.logger.info('Request sent to master', {
         requestId,
-        userId: requestData.userId,
+        userId: userInfo.id,
         masterChatId
       });
     }
@@ -219,7 +156,7 @@ ${requestData.description}
     if (ctx.logger) {
       ctx.logger.error('Failed to send request to master', {
         requestId,
-        userId: requestData.userId,
+        userId: userInfo.id,
         masterChatId,
         error: error instanceof Error ? error : new Error(String(error))
       });
