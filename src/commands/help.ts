@@ -8,7 +8,6 @@ export async function helpCommand(ctx: Context): Promise<void> {
 🎨 /start - Начать работу с ботом
 ❓ /help - Показать эту справку
 📝 /request - Создать новый запрос на татуировку
-📋 /my_requests - Посмотреть мои запросы
 📞 /contact - Контактная информация
 💰 /prices - Узнать цены на услуги
 

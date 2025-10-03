@@ -13,7 +13,6 @@ export async function startCommand(ctx: Context): Promise<void> {
 /start - Начать работу с ботом
 /help - Помощь и инструкции
 /request - Создать запрос на татуировку
-/my_requests - Мои запросы
 /contact - Контактная информация
 /prices - Цены на услуги
 

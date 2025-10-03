@@ -7,6 +7,8 @@ import { DatabaseService } from './services/database';
 import { createSessionMiddleware } from './middleware/session';
 import { startCommand } from './commands/start';
 import { helpCommand } from './commands/help';
+import { contactCommand } from './commands/contact';
+import { pricesCommand } from './commands/prices';
 import { requestCommand, handleRequestText, requestSessions } from './commands/request';
 import { replyCommand, handleReplyText, handleReplyCallback, replySessions } from './commands/reply';
 import Logger from './utils/logger';
@@ -71,6 +73,12 @@ class TattooBot {
 
     // Команда /help
     this.bot.help(helpCommand);
+
+    // Команда /contact
+    this.bot.command('contact', contactCommand);
+
+    // Команда /prices
+    this.bot.command('prices', pricesCommand);
 
     // Команда /request
     this.bot.command('request', (ctx) => {
