@@ -31,6 +31,7 @@ export interface BotConfig {
   databasePath: string;
   logLevel: string;
   webhookSecret?: string;
+  masterChatId?: string;
 }
 
 export interface LogContext {
@@ -38,6 +39,22 @@ export interface LogContext {
   chatId?: number;
   command?: string;
   error?: Error;
+  requestId?: number;
+  masterChatId?: string;
+}
+
+export interface RequestSession {
+  step: 'waiting_for_description' | 'waiting_for_confirm';
+  data: {
+    userId: number;
+    userInfo: {
+      id: number;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+    };
+    description?: string;
+  };
 }
 
 

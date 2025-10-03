@@ -6,6 +6,7 @@ import { UserSession } from '../types';
 declare module 'telegraf' {
   interface Context {
     user?: UserSession;
+    session?: { [key: string]: any };
   }
 }
 
@@ -39,6 +40,11 @@ export function createSessionMiddleware(database: DatabaseService): MiddlewareFn
 
       // Добавляем пользователя в контекст
       ctx.user = user;
+      
+      // Инициализируем объект сессии если его нет
+      if (!ctx.session) {
+        ctx.session = {};
+      }
       
       return next();
     } catch (error) {
