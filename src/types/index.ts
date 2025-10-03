@@ -39,8 +39,11 @@ export interface LogContext {
   chatId?: number;
   command?: string;
   error?: Error;
-  requestId?: number;
+  requestId?: number | undefined;
   masterChatId?: string;
+  masterId?: number;
+  replyId?: number;
+  clientId?: number;
 }
 
 export interface RequestSession {
@@ -55,6 +58,29 @@ export interface RequestSession {
     };
     description?: string;
   };
+}
+
+export interface ReplySession {
+  step: 'waiting_for_message';
+  data: {
+    clientId: number;
+    clientInfo: {
+      id: number;
+      username?: string | undefined;
+      firstName?: string | undefined;
+      lastName?: string | undefined;
+    };
+    requestId?: number | undefined;
+  };
+}
+
+export interface MasterReply {
+  id: number;
+  requestId: number;
+  clientId: number;
+  masterId: number;
+  message: string;
+  createdAt: Date;
 }
 
 

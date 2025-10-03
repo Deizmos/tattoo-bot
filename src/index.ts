@@ -8,6 +8,7 @@ import { createSessionMiddleware } from './middleware/session';
 import { startCommand } from './commands/start';
 import { helpCommand } from './commands/help';
 import { requestCommand, handleRequestText, requestSessions } from './commands/request';
+import { replyCommand, handleReplyText, handleReplyCallback, replySessions } from './commands/reply';
 import Logger from './utils/logger';
 import { BotConfig } from './types';
 
@@ -79,12 +80,20 @@ class TattooBot {
       return requestCommand(ctx as any);
     });
 
-    // Обработка callback'ов (если понадобится в будущем)
-    // this.bot.on('callback_query', async (ctx) => {
-    //   (ctx as any).database = this.database;
-    //   (ctx as any).logger = this.logger;
-    //   return handleRequestCallback(ctx as any);
-    // });
+    // Команда /reply (только для мастера)
+    this.bot.command('reply', (ctx) => {
+      // Добавляем сервисы в контекст
+      (ctx as any).database = this.database;
+      (ctx as any).logger = this.logger;
+      return replyCommand(ctx as any);
+    });
+
+    // Обработка callback'ов для кнопок ответа
+    this.bot.on('callback_query', async (ctx) => {
+      (ctx as any).database = this.database;
+      (ctx as any).logger = this.logger;
+      return handleReplyCallback(ctx as any);
+    });
 
     // Обработка текстовых сообщений
     this.bot.on(message('text'), async (ctx) => {
@@ -110,6 +119,17 @@ class TattooBot {
           (ctx as any).database = this.database;
           (ctx as any).logger = this.logger;
           return handleRequestText(ctx as any);
+        }
+      }
+
+      // Проверяем сессии для команды /reply (для мастера)
+      if (userId) {
+        const replySession = replySessions[userId];
+        if (replySession && replySession.step === 'waiting_for_message') {
+          // Добавляем сервисы в контекст
+          (ctx as any).database = this.database;
+          (ctx as any).logger = this.logger;
+          return handleReplyText(ctx as any);
         }
       }
 

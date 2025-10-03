@@ -137,7 +137,7 @@ ${description}
           [
             { 
               text: '💬 Ответить клиенту', 
-              url: `https://t.me/${ctx.botInfo?.username}?start=reply_${userInfo.id}` 
+              callback_data: `reply_${userInfo.id}_${requestId}` 
             }
           ]
         ]

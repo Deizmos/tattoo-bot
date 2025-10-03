@@ -1,6 +1,6 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
-import { UserSession, TattooRequest } from '../types';
+import { UserSession, TattooRequest, MasterReply } from '../types';
 
 export class DatabaseService {
   private db: sqlite3.Database;
@@ -40,6 +40,20 @@ export class DatabaseService {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+
+    // Создание таблицы ответов мастера
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS master_replies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL,
+        client_id INTEGER NOT NULL,
+        master_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (request_id) REFERENCES tattoo_requests (id),
+        FOREIGN KEY (client_id) REFERENCES users (id)
       )
     `);
 
@@ -152,6 +166,79 @@ export class DatabaseService {
               updatedAt: new Date(row.updated_at)
             }));
             resolve(requests);
+          }
+        }
+      );
+    });
+  }
+
+  // Методы для работы с ответами мастера
+  async saveMasterReply(reply: Omit<MasterReply, 'id' | 'createdAt'>): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const stmt = this.db.prepare(`
+        INSERT INTO master_replies 
+        (request_id, client_id, master_id, message)
+        VALUES (?, ?, ?, ?)
+      `);
+      
+      stmt.run([
+        reply.requestId,
+        reply.clientId,
+        reply.masterId,
+        reply.message
+      ], function(err) {
+        if (err) reject(err);
+        else resolve(this.lastID);
+      });
+    });
+  }
+
+  async getMasterReplies(requestId: number): Promise<MasterReply[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM master_replies WHERE request_id = ? ORDER BY created_at ASC',
+        [requestId],
+        (err, rows: any[]) => {
+          if (err) reject(err);
+          else {
+            const replies = rows.map(row => ({
+              id: row.id,
+              requestId: row.request_id,
+              clientId: row.client_id,
+              masterId: row.master_id,
+              message: row.message,
+              createdAt: new Date(row.created_at)
+            }));
+            resolve(replies);
+          }
+        }
+      );
+    });
+  }
+
+  async getTattooRequestById(requestId: number): Promise<TattooRequest | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM tattoo_requests WHERE id = ?',
+        [requestId],
+        (err, row: any) => {
+          if (err) reject(err);
+          else if (row) {
+            resolve({
+              id: row.id,
+              userId: row.user_id,
+              description: row.description,
+              style: row.style,
+              size: row.size,
+              placement: row.placement,
+              budget: row.budget,
+              images: row.images ? JSON.parse(row.images) : [],
+              status: row.status,
+              createdAt: new Date(row.created_at),
+              updatedAt: new Date(row.updated_at)
+            });
+          } else {
+            resolve(null);
           }
         }
       );
