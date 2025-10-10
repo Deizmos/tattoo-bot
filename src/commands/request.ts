@@ -14,6 +14,9 @@ export const requestSessions: { [userId: number]: any } = {};
 // Максимальное количество фотографий на запрос
 const MAX_PHOTOS = 5;
 
+// Хранилище для обработки медиагрупп
+const mediaGroupSessions: { [groupId: string]: any } = {};
+
 export async function requestCommand(ctx: RequestCommandContext): Promise<void> {
   if (!ctx.from) {
     await ctx.reply('❌ Ошибка: не удалось определить пользователя');
@@ -39,7 +42,10 @@ export async function requestCommand(ctx: RequestCommandContext): Promise<void> 
 • Можете прикрепить фотографии-референсы (максимум ${MAX_PHOTOS} фото)
 • Указать особые пожелания
 
-<b>Сначала отправьте фотографии, затем опишите запрос.</b>
+<b>Способы отправки запроса:</b>
+1️⃣ Отправьте фото с подписью (текст в описании фото)
+2️⃣ Отправьте фото, затем отдельно текстовое описание
+3️⃣ Отправьте только текстовое описание
 
 <i>Пример: "Хочу татуировку дракона в стиле реализм на плече, размер средний, бюджет до 50000 рублей"</i>`;
 
@@ -123,6 +129,8 @@ export async function handleRequestPhoto(ctx: RequestCommandContext): Promise<vo
   // Проверяем, ждет ли бот описание запроса от этого пользователя
   if (session && session.waitingForDescription) {
     const photo = ctx.message.photo;
+    const caption = 'caption' in ctx.message ? ctx.message.caption : undefined;
+    const mediaGroupId = 'media_group_id' in ctx.message ? ctx.message.media_group_id : undefined;
     
     // Получаем фото с наибольшим разрешением
     const largestPhoto = photo[photo.length - 1];
@@ -140,9 +148,22 @@ export async function handleRequestPhoto(ctx: RequestCommandContext): Promise<vo
       return;
     }
 
+    // Если это медиагруппа, обрабатываем специально
+    if (mediaGroupId) {
+      await handleMediaGroup(ctx, userId, fileId, caption, mediaGroupId);
+      return;
+    }
+
     // Добавляем фото в сессию
     session.photos.push(fileId);
 
+    // Если есть caption с текстом, обрабатываем запрос сразу
+    if (caption && caption.trim()) {
+      await processRequestWithPhotos(ctx, session, caption.trim());
+      return;
+    }
+
+    // Показываем сообщение только если нет caption (фото без подписи)
     const remainingPhotos = MAX_PHOTOS - session.photos.length;
     const photosText = remainingPhotos > 0 
       ? `📸 <b>Фото добавлено!</b>\n\nМожете добавить ещё: ${remainingPhotos} фото\n\nОтправьте еще фото или текстовое описание запроса.`
@@ -151,6 +172,88 @@ export async function handleRequestPhoto(ctx: RequestCommandContext): Promise<vo
     await ctx.reply(photosText, { parse_mode: 'HTML' });
 
     console.log(`Photo added for user ${userId}, total photos: ${session.photos.length}`);
+  }
+}
+
+async function handleMediaGroup(ctx: RequestCommandContext, userId: number, fileId: string, caption: string | undefined, mediaGroupId: string): Promise<void> {
+  const session = requestSessions[userId];
+  
+  if (!mediaGroupSessions[mediaGroupId]) {
+    mediaGroupSessions[mediaGroupId] = {
+      photos: [],
+      caption: caption,
+      userId: userId,
+      processed: false
+    };
+  }
+  
+  const mediaGroup = mediaGroupSessions[mediaGroupId];
+  mediaGroup.photos.push(fileId);
+  
+  // Если есть caption, сохраняем его
+  if (caption && caption.trim()) {
+    mediaGroup.caption = caption.trim();
+  }
+  
+  // Добавляем небольшую задержку для сбора всех фото в группе
+  setTimeout(async () => {
+    if (!mediaGroup.processed) {
+      mediaGroup.processed = true;
+      
+      // Добавляем все фото из медиагруппы в сессию пользователя
+      session.photos.push(...mediaGroup.photos);
+      
+      // Если есть caption, обрабатываем запрос
+      if (mediaGroup.caption) {
+        await processRequestWithPhotos(ctx, session, mediaGroup.caption);
+      } else {
+        // Если нет caption, показываем сообщение о добавленных фото
+        const remainingPhotos = MAX_PHOTOS - session.photos.length;
+        const photosText = remainingPhotos > 0 
+          ? `📸 <b>Фотографии добавлены!</b>\n\nДобавлено: ${mediaGroup.photos.length} фото\nМожете добавить ещё: ${remainingPhotos} фото\n\nОтправьте еще фото или текстовое описание запроса.`
+          : `📸 <b>Фотографии добавлены!</b>\n\nДобавлено: ${mediaGroup.photos.length} фото\nДостигнут лимит фотографий (${MAX_PHOTOS}). Отправьте текстовое описание запроса для завершения.`;
+        
+        await ctx.reply(photosText, { parse_mode: 'HTML' });
+      }
+      
+      // Очищаем медиагруппу
+      delete mediaGroupSessions[mediaGroupId];
+    }
+  }, 1000); // Задержка 1 секунда для сбора всех фото в группе
+}
+
+async function processRequestWithPhotos(ctx: RequestCommandContext, session: any, description: string): Promise<void> {
+  try {
+    // Сохраняем запрос в базу данных
+    const requestData: Omit<TattooRequest, 'id' | 'createdAt' | 'updatedAt'> = {
+      userId: session.userInfo.id,
+      description: description,
+      images: session.photos || [],
+      status: 'pending'
+    };
+
+    if (ctx.database) {
+      const requestId = await ctx.database.saveTattooRequest(requestData);
+      
+      // Отправляем запрос мастеру
+      await sendRequestToMaster(ctx, session.userInfo, requestId, description, session.photos || []);
+      
+      // Очищаем сессию
+      delete requestSessions[session.userInfo.id];
+      
+      await ctx.reply('✅ <b>Запрос отправлен!</b>\n\nВаш запрос был передан мастеру. Мы свяжемся с вами в ближайшее время для обсуждения деталей.\n\nСпасибо за обращение! 🎨', { 
+        parse_mode: 'HTML' 
+      });
+
+      console.log('Request #' + requestId + ' saved and sent to master with photos and caption');
+    } else {
+      throw new Error('Database service not available');
+    }
+  } catch (error) {
+    console.error('Error saving request:', error);
+    await ctx.reply('❌ <b>Произошла ошибка</b>\n\nПопробуйте создать запрос заново с помощью команды /request', { 
+      parse_mode: 'HTML' 
+    });
   }
 }
 
@@ -180,35 +283,75 @@ ${photos.length > 0 ? `📸 <b>Прикрепленные фотографии:<
 <code>Ответить пользователю ${userInfo.id}: ваш ответ</code>`;
 
   try {
-    // Отправляем основное сообщение
-    await ctx.telegram.sendMessage(masterChatId, masterMessage, { 
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { 
-              text: '💬 Ответить клиенту', 
-              callback_data: `reply_${userInfo.id}_${requestId}` 
-            }
-          ]
-        ]
-      }
-    });
-
-    // Отправляем фотографии отдельными сообщениями
+    // Отправляем запрос с фотографиями одним сообщением
     if (photos.length > 0) {
-      for (const photoId of photos) {
-        try {
+      if (photos.length === 1) {
+        // Если одна фотография, отправляем с текстом как caption
+        const photoId = photos[0];
+        if (photoId) {
           await ctx.telegram.sendPhoto(masterChatId, photoId, {
-            caption: `📸 Фото для запроса #${requestId}`,
-            parse_mode: 'HTML'
+            caption: masterMessage,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { 
+                    text: '💬 Ответить клиенту', 
+                    callback_data: `reply_${userInfo.id}_${requestId}` 
+                  }
+                ]
+              ]
+            }
           });
-        } catch (photoError) {
-          console.error('Error sending photo:', photoError);
-          // Отправляем сообщение об ошибке с фото
-          await ctx.telegram.sendMessage(masterChatId, `❌ Ошибка при отправке фото для запроса #${requestId}: ${photoId}`);
         }
+      } else {
+        // Если несколько фотографий, используем sendMediaGroup
+        const mediaGroup = photos.map((photoId, index) => {
+          const mediaItem: any = {
+            type: 'photo',
+            media: photoId
+          };
+          
+          // Добавляем caption только к первой фотографии
+          if (index === 0) {
+            mediaItem.caption = masterMessage;
+            mediaItem.parse_mode = 'HTML';
+          }
+          
+          return mediaItem;
+        });
+
+        await ctx.telegram.sendMediaGroup(masterChatId, mediaGroup);
+        
+        // Отправляем кнопку ответа отдельным сообщением после медиагруппы
+        await ctx.telegram.sendMessage(masterChatId, '💬 Ответить клиенту:', {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { 
+                  text: '💬 Ответить клиенту', 
+                  callback_data: `reply_${userInfo.id}_${requestId}` 
+                }
+              ]
+            ]
+          }
+        });
       }
+    } else {
+      // Если нет фотографий, отправляем обычное текстовое сообщение
+      await ctx.telegram.sendMessage(masterChatId, masterMessage, { 
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { 
+                text: '💬 Ответить клиенту', 
+                callback_data: `reply_${userInfo.id}_${requestId}` 
+              }
+            ]
+          ]
+        }
+      });
     }
 
     if (ctx.logger) {
