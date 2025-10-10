@@ -11,6 +11,9 @@ interface RequestCommandContext extends Context {
 // Глобальное хранилище сессий
 export const requestSessions: { [userId: number]: any } = {};
 
+// Максимальное количество фотографий на запрос
+const MAX_PHOTOS = 5;
+
 export async function requestCommand(ctx: RequestCommandContext): Promise<void> {
   if (!ctx.from) {
     await ctx.reply('❌ Ошибка: не удалось определить пользователя');
@@ -33,10 +36,10 @@ export async function requestCommand(ctx: RequestCommandContext): Promise<void> 
 • Бюджет (если есть предпочтения)
 
 📸 <b>Дополнительно:</b>
-• Можете прикрепить фотографии-референсы
+• Можете прикрепить фотографии-референсы (максимум ${MAX_PHOTOS} фото)
 • Указать особые пожелания
 
-<b>Напишите ваш запрос одним сообщением, и я передам его мастеру!</b>
+<b>Сначала отправьте фотографии, затем опишите запрос.</b>
 
 <i>Пример: "Хочу татуировку дракона в стиле реализм на плече, размер средний, бюджет до 50000 рублей"</i>`;
 
@@ -51,6 +54,7 @@ export async function requestCommand(ctx: RequestCommandContext): Promise<void> 
       firstName: userInfo.first_name,
       lastName: userInfo.last_name
     },
+    photos: [],
     timestamp: Date.now()
   };
 
@@ -76,6 +80,7 @@ export async function handleRequestText(ctx: RequestCommandContext): Promise<voi
       const requestData: Omit<TattooRequest, 'id' | 'createdAt' | 'updatedAt'> = {
         userId: session.userInfo.id,
         description: description,
+        images: session.photos || [],
         status: 'pending'
       };
 
@@ -83,7 +88,7 @@ export async function handleRequestText(ctx: RequestCommandContext): Promise<voi
         const requestId = await ctx.database.saveTattooRequest(requestData);
         
         // Отправляем запрос мастеру
-        await sendRequestToMaster(ctx, session.userInfo, requestId, description);
+        await sendRequestToMaster(ctx, session.userInfo, requestId, description, session.photos || []);
         
         // Очищаем сессию
         delete requestSessions[userId];
@@ -105,7 +110,51 @@ export async function handleRequestText(ctx: RequestCommandContext): Promise<voi
   }
 }
 
-async function sendRequestToMaster(ctx: RequestCommandContext, userInfo: any, requestId: number, description: string): Promise<void> {
+export async function handleRequestPhoto(ctx: RequestCommandContext): Promise<void> {
+  if (!ctx.from || !('photo' in ctx.message!)) {
+    return;
+  }
+
+  const userId = ctx.from.id;
+  const session = requestSessions[userId];
+
+  console.log('Checking photo session for user:', userId);
+
+  // Проверяем, ждет ли бот описание запроса от этого пользователя
+  if (session && session.waitingForDescription) {
+    const photo = ctx.message.photo;
+    
+    // Получаем фото с наибольшим разрешением
+    const largestPhoto = photo[photo.length - 1];
+    if (!largestPhoto) {
+      await ctx.reply('❌ Ошибка при обработке фотографии');
+      return;
+    }
+    const fileId = largestPhoto.file_id;
+
+    // Проверяем лимит фотографий
+    if (session.photos.length >= MAX_PHOTOS) {
+      await ctx.reply(`❌ <b>Превышен лимит фотографий</b>\n\nМаксимальное количество фотографий: ${MAX_PHOTOS}\n\nОтправьте текстовое описание запроса, чтобы завершить создание заявки.`, { 
+        parse_mode: 'HTML' 
+      });
+      return;
+    }
+
+    // Добавляем фото в сессию
+    session.photos.push(fileId);
+
+    const remainingPhotos = MAX_PHOTOS - session.photos.length;
+    const photosText = remainingPhotos > 0 
+      ? `📸 <b>Фото добавлено!</b>\n\nМожете добавить ещё: ${remainingPhotos} фото\n\nОтправьте еще фото или текстовое описание запроса.`
+      : `📸 <b>Фото добавлено!</b>\n\nДостигнут лимит фотографий (${MAX_PHOTOS}). Отправьте текстовое описание запроса для завершения.`;
+
+    await ctx.reply(photosText, { parse_mode: 'HTML' });
+
+    console.log(`Photo added for user ${userId}, total photos: ${session.photos.length}`);
+  }
+}
+
+async function sendRequestToMaster(ctx: RequestCommandContext, userInfo: any, requestId: number, description: string, photos: string[] = []): Promise<void> {
   // ID мастера - должен быть настроен в переменных окружения
   const masterChatId = process.env.MASTER_CHAT_ID;
   
@@ -124,12 +173,14 @@ async function sendRequestToMaster(ctx: RequestCommandContext, userInfo: any, re
 📝 <b>Описание запроса:</b>
 ${description}
 
+${photos.length > 0 ? `📸 <b>Прикрепленные фотографии:</b> ${photos.length} шт.\n` : ''}
 📅 <b>Дата создания:</b> ${new Date().toLocaleString('ru-RU')}
 
 💬 <b>Для ответа клиенту используйте:</b>
 <code>Ответить пользователю ${userInfo.id}: ваш ответ</code>`;
 
   try {
+    // Отправляем основное сообщение
     await ctx.telegram.sendMessage(masterChatId, masterMessage, { 
       parse_mode: 'HTML',
       reply_markup: {
@@ -144,11 +195,28 @@ ${description}
       }
     });
 
+    // Отправляем фотографии отдельными сообщениями
+    if (photos.length > 0) {
+      for (const photoId of photos) {
+        try {
+          await ctx.telegram.sendPhoto(masterChatId, photoId, {
+            caption: `📸 Фото для запроса #${requestId}`,
+            parse_mode: 'HTML'
+          });
+        } catch (photoError) {
+          console.error('Error sending photo:', photoError);
+          // Отправляем сообщение об ошибке с фото
+          await ctx.telegram.sendMessage(masterChatId, `❌ Ошибка при отправке фото для запроса #${requestId}: ${photoId}`);
+        }
+      }
+    }
+
     if (ctx.logger) {
       ctx.logger.info('Request sent to master', {
         requestId,
         userId: userInfo.id,
-        masterChatId
+        masterChatId,
+        photosCount: photos.length
       });
     }
   } catch (error) {
@@ -158,6 +226,7 @@ ${description}
         requestId,
         userId: userInfo.id,
         masterChatId,
+        photosCount: photos.length,
         error: error instanceof Error ? error : new Error(String(error))
       });
     }

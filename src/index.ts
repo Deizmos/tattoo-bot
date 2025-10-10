@@ -9,7 +9,7 @@ import { startCommand } from './commands/start';
 import { helpCommand } from './commands/help';
 import { contactCommand } from './commands/contact';
 import { pricesCommand } from './commands/prices';
-import { requestCommand, handleRequestText, requestSessions } from './commands/request';
+import { requestCommand, handleRequestText, handleRequestPhoto, requestSessions } from './commands/request';
 import { replyCommand, handleReplyText, handleReplyCallback, replySessions } from './commands/reply';
 import Logger from './utils/logger';
 import { BotConfig } from './types';
@@ -161,7 +161,20 @@ class TattooBot {
 
     // Обработка фотографий
     this.bot.on(message('photo'), async (ctx) => {
-      await ctx.reply('📸 Отличная фотография! Это референс для будущей татуировки? Я передам мастеру для изучения.');
+      // Проверяем сессии для команды /request
+      const userId = ctx.from?.id;
+      if (userId) {
+        const globalSession = requestSessions[userId];
+        if (globalSession && globalSession.waitingForDescription) {
+          // Добавляем сервисы в контекст
+          (ctx as any).database = this.database;
+          (ctx as any).logger = this.logger;
+          return handleRequestPhoto(ctx as any);
+        }
+      }
+
+      // Если нет активной сессии запроса, показываем общее сообщение
+      await ctx.reply('📸 Отличная фотография! Это референс для будущей татуировки? Используйте команду /request для создания запроса с фотографиями.');
     });
   }
 

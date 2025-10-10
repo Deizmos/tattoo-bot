@@ -44,6 +44,7 @@ export interface LogContext {
   masterId?: number;
   replyId?: number;
   clientId?: number;
+  photosCount?: number;
 }
 
 export interface RequestSession {
@@ -57,6 +58,7 @@ export interface RequestSession {
       lastName?: string;
     };
     description?: string;
+    photos?: string[];
   };
 }
 
