@@ -31,5 +31,19 @@ export async function contactCommand(ctx: Context): Promise<void> {
 
 Ждем вас в нашем салоне! 🎨✨`;
 
-  await ctx.reply(contactMessage, { parse_mode: 'HTML' });
+  // Координаты салона (примерные координаты для Москвы)
+  const salonLatitude = 55.7558;
+  const salonLongitude = 37.6176;
+
+  try {
+    // Отправляем текстовое сообщение с контактной информацией
+    await ctx.reply(contactMessage, { parse_mode: 'HTML' });
+    
+    // Отправляем геолокацию салона
+    await ctx.replyWithLocation(salonLatitude, salonLongitude);
+    
+  } catch (error) {
+    console.error('Ошибка при отправке контактной информации:', error);
+    await ctx.reply('Извините, произошла ошибка при отправке контактной информации. Попробуйте позже.');
+  }
 }
