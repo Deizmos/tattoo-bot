@@ -219,7 +219,7 @@ async function handleMediaGroup(ctx: RequestCommandContext, userId: number, file
       // Очищаем медиагруппу
       delete mediaGroupSessions[mediaGroupId];
     }
-  }, 1000); // Задержка 1 секунда для сбора всех фото в группе
+  }, 500); // Задержка 1 секунда для сбора всех фото в группе
 }
 
 async function processRequestWithPhotos(ctx: RequestCommandContext, session: any, description: string): Promise<void> {
